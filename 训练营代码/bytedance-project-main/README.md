@@ -1,2 +1,0 @@
-# bytedance-project
-bytedance-project 
