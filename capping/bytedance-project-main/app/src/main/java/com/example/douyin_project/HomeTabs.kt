@@ -7,26 +7,23 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.Divider
-import androidx.compose.material3.Icon
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.modifier.ModifierLocalReadScope
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -42,33 +39,42 @@ fun HomeTabs(
 ){
     val tabs = listOf("北京", "团购", "关注", "社区", "推荐")
 
+    // 获取状态栏高度
+    val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+
     Column(modifier = modifier) {
-        Spacer(modifier = Modifier.height(44.dp)) //figma测量出来距离顶部44.dp
+        // 状态栏占位空间 - 显示系统状态栏信息
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(statusBarHeight)
+                .background(Color.Transparent)
+        )
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(44.dp) //figma上面测量出来是44高度
-                .background(Color.White)
+                .height(44.dp)
+                .background(Color.Transparent)
                 .padding(horizontal = 0.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ){
-            // Tab列表主逻辑
             Row {
                 Image(
-                    painter = painterResource(id = R.drawable.hometab1), // 替换为你的PNG资源ID
+                    painter = painterResource(id = R.drawable.hometab1),
                     contentDescription = "自定义图标",
                     modifier = Modifier
-                        .size(44.dp)  // figma测量出来图标大小44
+                        .size(44.dp)
                         .padding(start = 12.dp)
                         .clickable {
                             // 图标的点击事件
-                            // 可以在这里添加图标的点击逻辑
                         },
                     contentScale = ContentScale.Fit
                 )
                 tabs.forEach { tab ->
                     val isSelected = tab == currentTab
+
                     Box(
                         modifier = Modifier
                             .padding(horizontal = 0.dp)
@@ -81,35 +87,40 @@ fun HomeTabs(
                     ){
                         Text(
                             text = tab,
-                            modifier = Modifier.padding(horizontal = 15.dp, vertical = 12.dp),
-                            color = if(isSelected) MaterialTheme.colorScheme.primary
-                            else Color.Gray,
+                            modifier = Modifier
+                                .padding(horizontal = 15.dp, vertical = 12.dp)
+                                .drawBehind {
+                                    if (isSelected) {
+                                        val lineWidth = size.width  // 使用完整宽度
+                                        val startX = (size.width - lineWidth) / 2  // 从中间开始
+                                        val lineBottom = size.height + 6.dp.toPx()
+                                        drawLine(
+                                            color = Color.Black,
+                                            start = Offset(startX, lineBottom),
+                                            end = Offset(startX + lineWidth, lineBottom),
+                                            strokeWidth = 2f
+                                        )
+                                    }
+                                },
+                            color = if(isSelected) Color.Black else Color.Gray,
                             fontWeight = if(isSelected) FontWeight.Bold else FontWeight.Normal,
-                            fontSize = 16.sp,
-                            style = MaterialTheme.typography.bodyMedium
+                            fontSize = 16.sp
                         )
                     }
                 }
                 Image(
-                    painter = painterResource(id = R.drawable.hometab2), // 替换为你的PNG资源ID
+                    painter = painterResource(id = R.drawable.hometab2),
                     contentDescription = "自定义图标",
                     modifier = Modifier
-                        .size(44.dp)  // figma测量出来图标大小44
-                        .padding(end = 12.dp)  // 图标和Tab列表之间的间距
+                        .size(44.dp)
+                        .padding(end = 12.dp)
                         .clickable {
                             // 图标的点击事件
-                            // 可以在这里添加图标的点击逻辑
                         },
                     contentScale = ContentScale.Fit
                 )
             }
         }
-        // 底部指示器
-        Divider(
-            color = Color.LightGray.copy(alpha = 0.3f),
-            thickness = 1.dp
-        )
     }
 }
-
 
