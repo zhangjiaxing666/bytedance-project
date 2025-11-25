@@ -63,6 +63,7 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 
+    implementation("androidx.compose.material:material:1.5.4")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("androidx.compose.foundation:foundation:1.5.4")
     implementation("androidx.appcompat:appcompat:1.6.1")

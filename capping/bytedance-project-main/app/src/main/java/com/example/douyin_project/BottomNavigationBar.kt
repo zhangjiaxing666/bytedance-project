@@ -33,7 +33,7 @@ fun BottomNavigationBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(100.dp)
+            .height(83.dp)
             .background(MaterialTheme.colorScheme.surface)
             .padding(horizontal = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,

@@ -1,6 +1,10 @@
 package com.example.douyin_project
 
+import android.content.Context
 import android.content.SharedPreferences
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 
 //用于管理点赞的
 class LikeManager(private val sharedPreferences: SharedPreferences) {
@@ -22,4 +26,13 @@ class LikeManager(private val sharedPreferences: SharedPreferences) {
     fun isLiked(postId: String): Boolean {
         return getLikedPosts().contains(postId)
     }
+}
+
+@Composable
+fun rememberLikeManager(): LikeManager {
+    val context = LocalContext.current
+    val sharedPreferences = remember {
+        context.getSharedPreferences("app_likes", Context.MODE_PRIVATE)
+    }
+    return remember { LikeManager(sharedPreferences) }
 }

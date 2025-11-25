@@ -139,6 +139,440 @@ Text(
 )
 ```
 
+## 3.3 关于双列瀑布流的实现
+
+### 3.3.1 创建一些数据
+
+我创建了一个Post.kt，用来保存每一个数据，里面定义一个数据类data class用来存储双列瀑布流中的每一个元素，具体存储的数据类型如下所示
+
+```kotlin
+data class Post(
+    val id: String,
+    val author: String,
+    val avatarRes: Int,
+    val imageRes: Int,
+    val title: String?,
+    val content: String,
+    val likeCount: Int,
+    val imageAspectRatio: Float //图片宽高比
+)
+```
+
+这些就是我创建的一些数据，在此就展示一下不做过多解释
+
+```kotlin
+fun generateMockPosts(): List<Post> {
+    return listOf(
+        Post("1", "设计师小王", R.drawable.begin2, R.drawable.begin1,
+            "现代简约风格设计", "这次的设计采用了极简主义风格，注重空间利用和光线效果", 156, 0.75f),
+        Post("2", "摄影爱好者", R.drawable.begin2, R.drawable.begin1,
+            null, "今天在公园拍到了一只可爱的小松鼠，阳光正好，心情愉悦", 89, 1.33f),
+        Post("3", "美食博主", R.drawable.begin2, R.drawable.begin1,
+            "家常菜分享", "红烧肉的做法很简单，关键是火候要掌握好", 234, 0.8f),
+        Post("4", "旅行达人", R.drawable.begin2, R.drawable.begin1,
+            null, "西藏的星空真的太美了，仿佛触手可及", 567, 1.25f),
+        Post("5", "程序员日常", R.drawable.begin2, R.drawable.begin1,
+            "代码优化技巧分享", "分享几个提升代码性能的小技巧", 78, 0.85f),
+        Post("6", "读书笔记", R.drawable.begin2, R.drawable.begin1,
+            "《活着》读后感", "人生无常，珍惜当下，感恩拥有", 145, 1.15f),
+        Post("7", "健身打卡", R.drawable.begin2, R.drawable.begin1,
+            null, "今天完成了10公里跑步，感觉整个人都轻松了", 299, 0.9f),
+        Post("8", "宠物日常", R.drawable.begin2, R.drawable.begin1,
+            "我家猫咪", "每天最幸福的事就是看着猫咪睡觉", 432, 1.1f)
+    )
+}
+```
+
+这里还是使用的listOf来保存所有的模拟数据的，方便从中取数据
+
+### 3.3.2 创建作品卡片
+
+作品卡片我们命名为PostCard，该可组合函数的参数有五个，分别是卡片所包含的信息post，是否点赞了，然后点击点赞和点击卡片所触发的回调函数，然后就是一个modifier，具体如下所示
+
+```kotlin
+@Composable
+fun PostCard(
+    post: Post,
+    isLiked: Boolean,
+    onLikeClick: (String) -> Unit,
+    onPostClick: (Post) -> Unit,
+    modifier: Modifier = Modifier
+) {}
+```
+
+接下来我会具体拆解PostCard中的每一个部分来详细阐述其组成
+
+首先整个卡片我们使用Card来包含，并且设置其为圆角也要加上点击时触发的回调函数，就是进入详情页面的回调函数
+
+```kotlin
+Card(
+    modifier = modifier
+        .fillMaxWidth()
+        .clickable{ onPostClick(post) },
+    shape = MaterialTheme.shapes.medium, //设置卡片的圆角形状
+    //设置卡片轻微阴影效果
+    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+) {}
+```
+
+需要注意的是，Card内部中的元素是呈列状来表示的，我们首先使用Box来封装展示的图片，里面使用了**`coerceIn`**来限制图片的宽高比，其中的0.75f和1.33f表示宽高比限制在 `3:4` ~ `4:3` 之间
+
+```kotlin
+Box(
+    modifier = Modifier
+        .fillMaxWidth()
+        .aspectRatio(post.imageAspectRatio.coerceIn(0.75f, 1.33f)) //限制宽高比在指定范围内
+) {
+    Image()
+}
+```
+
+图片下面的内容，就是具体的作品内容区域，作品内容包含以下元素，作品的标题或者叫做正文和作者的信息以及点赞数目。后者我们选择采用Row来布局，作者头像、昵称和点赞数量是排列在一排的，直接用Row布局会非常的方便
+
+![image-20251125170635279](C:\Users\Y9000P\AppData\Roaming\Typora\typora-user-images\image-20251125170635279.png)
+
+```kotlin
+//作者信息以及点赞
+Row(
+    modifier = Modifier.fillMaxWidth(),
+    horizontalArrangement = Arrangement.SpaceBetween,
+    verticalAlignment = Alignment.CenterVertically
+) {
+    //作者头像和昵称
+    Row(
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Image(
+            painter = painterResource(id = post.avatarRes),
+            contentDescription = "作者头像",
+            modifier = Modifier
+                .size(24.dp)
+                .clip(CircleShape), //圆形裁剪
+            contentScale = ContentScale.Crop //缩放模式,图片充满圆形区域不会变形
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = post.author,
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            color = Color.Gray
+        )
+    }
+    //点赞图标和数量
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .clickable { onLikeClick(post.id) }
+            .padding(4.dp)
+    ) {
+        Icon(
+            imageVector = if(isLiked) Icons.Filled.Favorite else Icons.Outlined.Favorite,
+            contentDescription = if(isLiked) "取消点赞" else "点赞",
+            tint = if(isLiked) Color.Red else Color.Gray,
+            modifier = Modifier.size(18.dp)
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+            text = formatCount(post.likeCount + if(isLiked) 1 else 0),
+            style = MaterialTheme.typography.labelSmall,
+            color = if(isLiked) Color.Red else Color.Gray //点击了就呈现红色心心
+        )
+    }
+}
+```
+
+并且需要注意的是，我们如何实现文字溢出的时候其余文字用`...`来表示，其实很简单，在Text的属性中增加一个属性**`overflow = TextOverflow.Ellipsis`**，即可。然后关于点赞数量，如果超出了我们可以用k(千),w(万)来表示，避免溢出
+
+```kotlin
+private fun formatCount(count: Int): String {
+    return when {
+        count >= 10000 -> "${count / 10000}w"
+        count >= 1000 -> "${count / 1000}k"
+        else -> count.toString()
+    }
+}
+```
+
+### 3.3.3 双列瀑布流的三种状态
+
+- EmptyState 空状态
+- LoadingState 加载状态
+- LoadMoreState 加载更多状态
+
+首先是空状态，空状态是用来表示加载失败的一种情况，由一个图标和文字（加载失败）以及重新加载的按钮组成，逻辑较为简单
+
+```kotlin
+Column(
+    modifier = modifier,
+    horizontalAlignment = Alignment.CenterHorizontally,
+    verticalArrangement = Arrangement.Center
+) {
+    Icon()
+    Spacer(modifier = Modifier.height(16.dp))
+    Text()
+    Spacer(modifier = Modifier.height(8.dp))
+    Button() {
+        Text("重新加载")
+    }
+}
+```
+
+然后就是加载状态，加载状态我们就呈现出一个加载的圆圈然后圆圈下面呈现出加载中的文字即可
+
+``` kotlin
+
+Box(
+    modifier = modifier,
+    contentAlignment = Alignment.Center
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        //加载的组件，用于展示加载的圆圈
+        CircularProgressIndicator()
+        Spacer(modifier = Modifier.height(16.dp))
+        //圆圈下面所呈现的文字
+        Text()
+    }
+}
+
+```
+
+最后就是加载更多状态，当下拉双列瀑布流时，会出现一个圆圈用来表示加载更多的状态
+
+```kotlin
+fun LoadMoreState() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        contentAlignment = Alignment.Center
+    ){
+        CircularProgressIndicator(
+            modifier = Modifier.size(24.dp),
+            strokeWidth = 2.dp
+        )
+    }
+}
+```
+
+### 3.3.4 管理点赞的类LikeManager
+
+之前的第二节课老师讲了，使用键值对来存储信息，存储到`SharedPreferences`里面，这次我们管理点赞数量也使用这种方法，我们讲这个管理点赞的类命名为`LikeManager`，接下来详细介绍其成员函数
+
+其中的成员函数有两个：`getLikedPosts()`和`toggleLike()` 。两个函数的作用分别用来获取用户所有点赞过的帖子集合以及用于切换点赞状态。
+
+`getLikedPosts()`主要逻辑是从`SharedPerferences`中获取点赞的帖子的点赞数目的
+
+```kotlin
+fun getLikedPosts(): Set<String> {
+    return sharedPreferences.getStringSet("liked_posts", mutableSetOf()) ?: mutableSetOf()
+}
+```
+
+`toggleLike()`主要逻辑是用户点赞了就把点赞过的帖子的名字放进去，取消点赞的从`SharedPreferences`取出
+
+```kotlin
+//用于切换点赞状态
+fun toggleLike(postId: String) {
+    val currentLiked = getLikedPosts().toMutableSet() //转化为可变的set
+    if(currentLiked.contains(postId)) {
+        currentLiked.remove(postId)
+    }else{
+        currentLiked.add(postId)
+    }
+    sharedPreferences.edit().putStringSet("liked_posts", currentLiked).apply()
+}
+```
+
+### 3.3.5 双列瀑布流展示的核心逻辑HomeScreen
+
+首先展示一下函数声明与参数
+
+```kotlin
+@Composable
+fun HomeScreen(
+    currentTab: String,        // 当前选中的标签
+    onTabSelected: (String) -> Unit, // 标签选择回调
+    modifier: Modifier = Modifier
+)
+```
+
+各个参数的作用已经注释到上面了，后面如果选择了其中的一个标签就会展示其详细内容，现在尚且没有实现，后面的3.4部分将会去实现
+
+然后我创建了几个参数分别用于状态管理和点赞管理
+
+```kotlin
+// 各种状态管理变量
+var posts by remember { mutableStateOf(emptyList<Post>()) } // 帖子列表数据
+var isLoading by remember { mutableStateOf(true) }          // 初始加载状态
+var isRefreshing by remember { mutableStateOf(false) }      // 下拉刷新状态
+var isLoadingMore by remember { mutableStateOf(false) }     // 加载更多状态
+var hasError by remember { mutableStateOf(false) }          // 错误状态
+var currentPage by remember { mutableStateOf(1) }           // 当前页码
+
+// 点赞功能管理
+val likeManager = rememberLikeManager()
+var likedPosts by remember { mutableStateOf(likeManager.getLikedPosts()) }
+```
+
+接下来这个函数用来实现下拉刷新功能
+
+```kotlin
+val pullRefreshState = rememberPullRefreshState(
+    refreshing = isRefreshing,
+    onRefresh = {
+        isRefreshing = true
+        coroutineScope.launch {
+            delay(1500) // 模拟网络请求
+            posts = generateMockPosts().shuffled() // 刷新数据
+            isRefreshing = false
+            currentPage = 1
+        }
+    }
+)
+```
+
+这里的rememberPullRefreshState是Compose中用于创建下拉刷新状态的函数，我们这里先用把之前准备的数据shuffeled来模拟刷新，然后重置页数
+
+显示之前我们需要初始数据加载
+
+```kotlin
+LaunchedEffect(Unit) {
+    loadInitialData(
+        onLoading = { isLoading = true },
+        onSuccess = { data ->
+            posts = data        // 加载成功，更新帖子列表
+            isLoading = false   // 关闭加载状态
+            hasError = false    // 重置错误状态
+        },
+        onError = {
+            isLoading = false
+            hasError = true     // 显示错误状态
+        }
+    )
+}
+```
+
+需要注意的是这里使用的是`LaunchedEffect`来实现的初始数据加载，里面的代码只会在组件首次组合时执行一次，里面设置了各种回调函数
+
+如果滚动到列表末尾，需要加载更多的数据，这里我们使用的是`rememberLazyStaggeredGridState()`来监听列表滚动，在LaunchedEffect中传入listState参数(监听的列表滚动)，当listState变化时，LaunchedEffect会取消之前的协程，重新启动新的协程，具体实现代码如下所示
+
+```kotlin
+ //监听列表滚动，实现更多的加载
+val listState = rememberLazyStaggeredGridState()
+LaunchedEffect(listState) {
+    snapshotFlow { listState.layoutInfo.visibleItemsInfo } // 将可见项信息转换为 Flow
+        .collect { visibleItems ->
+            if(visibleItems.isNotEmpty() &&
+                visibleItems.last().index >= posts.size - 3 &&
+                !isLoadingMore && !hasError) {
+                loadMoreData(
+                    currentPage = currentPage,
+                    onLoading = { isLoadingMore = true },
+                    onSuccess = { newPosts ->
+                        posts = posts + newPosts
+                        isLoadingMore = false
+                        currentPage++
+                    },
+                    onError = {
+                        isLoadingMore = false
+                    }
+                )
+            }
+        }
+}
+```
+
+下面便是上部导航栏和瀑布双列表在手机上展示出来的具体代码
+
+我们把HomeTabs和具体的内容区域放到Column里面即可
+
+```kotlin
+Column(modifier = modifier) {
+    HomeTabs() //上部导航栏区域
+    Box() //内容区域
+}
+```
+
+接下来讲解一下`Box()`的具体组成
+
+```kotlin
+Box(modifier = Modifier.fillMaxSize()) {
+    when {
+        // 状态1: 错误且无数据
+        hasError && posts.isEmpty() -> { ... }
+        
+        // 状态2: 加载中且无数据  
+        isLoading && posts.isEmpty() -> { ... }
+        
+        // 状态3: 正常显示内容
+        else -> { ... }
+    }
+}
+```
+
+这里只走了正常显示内容的这一条逻辑，非常方便的是，Compose提供了LazyVerticalStaggeredGrid组件来供我们来实现瀑布流网格布局，需要传入参数columns = StaggeredGridCells.Fixed(2)表示的是我们需要两个布局，大括号中则具体展示了整个瀑布流的实现逻辑，我们直接使用itemsIndexed来遍历每一个内容，然后使用PostCard展示出我们的瀑布流
+
+```kotlin
+//这里是内容区域
+Box(modifier = Modifier.fillMaxSize()) {
+    when {
+        hasError && posts.isEmpty() -> {...}
+        isLoading && posts.isEmpty() -> {...}
+        else -> {
+            //下拉刷新和瀑布流
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pullRefresh(pullRefreshState)
+            ) {
+                LazyVerticalStaggeredGrid(
+                    columns = StaggeredGridCells.Fixed(2),
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color(0xFFF5F5F5)),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalItemSpacing = 8.dp,
+                    contentPadding = PaddingValues(8.dp)
+                ) {
+                    //遍历帖子列表
+                    itemsIndexed(posts) {index, post ->
+                        val isLiked = likedPosts.contains(post.id)
+
+                        PostCard(
+                            post = post,
+                            isLiked = isLiked,
+                            onLikeClick = { postId ->
+                                likeManager.toggleLike(postId)
+                                likedPosts = likeManager.getLikedPosts()
+                            },
+                            onPostClick = { clickdPost ->
+                                //处理帖子点击
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    if(isLoadingMore){
+                        item {
+                            LoadMoreState()
+                        }
+                    }
+                }
+                //下拉刷新指示器
+                PullRefreshIndicator(
+                    refreshing = isRefreshing,
+                    state = pullRefreshState,
+                    modifier = Modifier.align(Alignment.TopCenter)
+                )
+            }
+        }
+    }
+}
+```
+
 
 
 # 4.技术难点和解决方案
