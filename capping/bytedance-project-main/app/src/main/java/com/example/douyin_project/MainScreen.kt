@@ -102,7 +102,10 @@ fun HomeScreen(
     currentTab: String,
     onTabSelected: (String) -> Unit,
     modifier: Modifier = Modifier
-){
+) {
+    //添加详情页状态
+    var selectedPost by remember { mutableStateOf<Post?>(null) }
+
     //用于状态管理
     var posts by remember { mutableStateOf(emptyList<Post>()) } // 帖子列表
     var isLoading by remember { mutableStateOf(true) } // 初始加载状态
@@ -135,7 +138,7 @@ fun HomeScreen(
     //初始加载数据
     LaunchedEffect(Unit) {
         loadInitialData(
-            onLoading = {isLoading = true},
+            onLoading = { isLoading = true },
             onSuccess = {
 
                 posts = it
@@ -181,92 +184,105 @@ fun HomeScreen(
                 }
             }
     }
-    Column(modifier = modifier) {
-        HomeTabs(
-            currentTab = currentTab,
-            onTabSelected = onTabSelected,
+    //添加点击就可以展示详情的页面
+    if (selectedPost != null) {
+        //展示详情页面
+        PostDetailScreen(
+            post = selectedPost!!,
+            onBackClick = { selectedPost = null },
             modifier = Modifier.fillMaxWidth()
         )
-        //这里是内容区域
-        Box(modifier = Modifier.fillMaxSize()) {
-            when {
-                hasError && posts.isEmpty() -> {
-                    //首次刷新失败
-                    EmptyState(
-                        onRetry = {
-                            hasError = false
-                            isLoading = true
-                            //重新加载
-                            coroutineScope.launch {
-                                loadInitialData(
-                                    onLoading = { /*todo*/},
-                                    onSuccess = {
-                                        posts = it
-                                        isLoading = false
-                                    },
-                                    onError = {
-                                        isLoading = false
-                                        hasError = true
-                                    }
-                                )
-                            }
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-                isLoading && posts.isEmpty() -> {
-                    LoadingState(modifier = Modifier.fillMaxSize())
-                }
-                else -> {
-                    //下拉刷新和瀑布流
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .pullRefresh(pullRefreshState)
-                    ) {
-                        LazyVerticalStaggeredGrid(
-                            columns = StaggeredGridCells.Fixed(2),
-                            state = listState,
+    } else {
+        Column(modifier = modifier) {
+            HomeTabs(
+                currentTab = currentTab,
+                onTabSelected = onTabSelected,
+                modifier = Modifier.fillMaxWidth()
+            )
+            //这里是内容区域
+            Box(modifier = Modifier.fillMaxSize()) {
+                when {
+                    hasError && posts.isEmpty() -> {
+                        //首次刷新失败
+                        EmptyState(
+                            onRetry = {
+                                hasError = false
+                                isLoading = true
+                                //重新加载
+                                coroutineScope.launch {
+                                    loadInitialData(
+                                        onLoading = { /*todo*/ },
+                                        onSuccess = {
+                                            posts = it
+                                            isLoading = false
+                                        },
+                                        onError = {
+                                            isLoading = false
+                                            hasError = true
+                                        }
+                                    )
+                                }
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+
+                    isLoading && posts.isEmpty() -> {
+                        LoadingState(modifier = Modifier.fillMaxSize())
+                    }
+
+                    else -> {
+                        //下拉刷新和瀑布流
+                        Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(Color(0xFFF5F5F5)),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalItemSpacing = 8.dp,
-                            contentPadding = PaddingValues(8.dp)
+                                .pullRefresh(pullRefreshState)
                         ) {
-                            itemsIndexed(posts) {index, post ->
-                                val isLiked = likedPosts.contains(post.id)
+                            LazyVerticalStaggeredGrid(
+                                columns = StaggeredGridCells.Fixed(2),
+                                state = listState,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Color(0xFFF5F5F5)),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalItemSpacing = 4.dp,
+                                contentPadding = PaddingValues(4.dp)
+                            ) {
+                                itemsIndexed(posts) { index, post ->
+                                    val isLiked = likedPosts.contains(post.id)
 
-                                PostCard(
-                                    post = post,
-                                    isLiked = isLiked,
-                                    onLikeClick = { postId ->
-                                        likeManager.toggleLike(postId)
-                                        likedPosts = likeManager.getLikedPosts()
-                                    },
-                                    onPostClick = { clickdPost ->
-                                        //处理帖子点击
-                                    },
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
-                            if(isLoadingMore){
-                                item {
-                                    LoadMoreState()
+                                    PostCard(
+                                        post = post,
+                                        isLiked = isLiked,
+                                        onLikeClick = { postId ->
+                                            likeManager.toggleLike(postId)
+                                            likedPosts = likeManager.getLikedPosts()
+                                        },
+                                        onPostClick = { clickdPost ->
+                                            //处理帖子点击
+                                            selectedPost = clickdPost
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
+                                if (isLoadingMore) {
+                                    item {
+                                        LoadMoreState()
+                                    }
                                 }
                             }
+                            //下拉刷新指示器
+                            PullRefreshIndicator(
+                                refreshing = isRefreshing,
+                                state = pullRefreshState,
+                                modifier = Modifier.align(Alignment.TopCenter)
+                            )
                         }
-                        //下拉刷新指示器
-                        PullRefreshIndicator(
-                            refreshing = isRefreshing,
-                            state = pullRefreshState,
-                            modifier = Modifier.align(Alignment.TopCenter)
-                        )
                     }
                 }
             }
         }
-    }
+}
 }
 
 @Composable

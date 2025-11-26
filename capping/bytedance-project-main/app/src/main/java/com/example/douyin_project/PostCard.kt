@@ -49,6 +49,7 @@ fun PostCard(
             .clickable{ onPostClick(post) },
         shape = MaterialTheme.shapes.small, //设置卡片的圆角形状
         //设置卡片轻微阴影效果
+        colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column {
