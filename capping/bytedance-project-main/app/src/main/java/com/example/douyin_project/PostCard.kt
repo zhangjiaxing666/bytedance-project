@@ -27,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -60,7 +61,7 @@ fun PostCard(
                     .aspectRatio(post.imageAspectRatio.coerceIn(0.75f, 1.33f)) //限制宽高比在指定范围内
             ) {
                 Image(
-                    painter = painterResource(id = post.imageRes),
+                    painter = painterResource(id = post.imageResList[0]), //默认展示第一张图片
                     contentDescription = "作品封面",
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
@@ -114,10 +115,10 @@ fun PostCard(
                             .clickable { onLikeClick(post.id) }
                             .padding(4.dp)
                     ) {
-                        Icon(
-                            imageVector = if(isLiked) Icons.Filled.Favorite else Icons.Outlined.Favorite, //心心图片
+                        Image(
+                            painter = painterResource(id = if(isLiked) R.drawable.like else R.drawable.notlike),
                             contentDescription = if(isLiked) "取消点赞" else "点赞",
-                            tint = if(isLiked) Color.Red else Color.Gray,
+                            colorFilter = if(isLiked) ColorFilter.tint(Color.Red) else null,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp)) //心心和点赞数量之间的距离

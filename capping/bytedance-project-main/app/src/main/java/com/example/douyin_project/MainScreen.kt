@@ -45,33 +45,127 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-
+import androidx.compose.runtime.derivedStateOf
 //主屏幕
 @Composable
 fun MainScreen() {
     var currentScreen by remember { mutableStateOf<BottomNavItem>(BottomNavItem.Home) }
     var currentTab by remember { mutableStateOf("社区") }
+    var selectedPost by remember { mutableStateOf<Post?>(null) }
+
+    // 将 HomeScreen 的所有状态提升到 MainScreen
+    var posts by remember { mutableStateOf(emptyList<Post>()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var isRefreshing by remember { mutableStateOf(false) }
+    var isLoadingMore by remember { mutableStateOf(false) }
+    var hasError by remember { mutableStateOf(false) }
+    var currentPage by remember { mutableStateOf(1) }
+
+    val likeManager = rememberLikeManager()
+    var likedPosts by remember { mutableStateOf(likeManager.getLikedPosts()) }
+
+    val coroutineScope = rememberCoroutineScope()
+
+    // 初始加载数据
+    LaunchedEffect(Unit) {
+        if (posts.isEmpty()) {
+            loadInitialData(
+                onLoading = { isLoading = true },
+                onSuccess = {
+                    posts = it
+                    isLoading = false
+                    hasError = false
+                },
+                onError = {
+                    isLoading = false
+                    hasError = true
+                }
+            )
+        }
+    }
+
+    val showBottomNav by derivedStateOf {
+        selectedPost == null
+    }
 
     Scaffold(
         bottomBar = {
-            BottomNavigationBar(
-                currentRoute = currentScreen.route,
-                onItemSelected = { navItem ->
-                    currentScreen = navItem
-                }
-            )
+            if (showBottomNav) {
+                BottomNavigationBar(
+                    currentRoute = currentScreen.route,
+                    onItemSelected = { navItem ->
+                        currentScreen = navItem
+                    }
+                )
+            }
         },
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { paddingValues ->
-        // 不使用 paddingValues，让内容从屏幕顶部开始
         Box(modifier = Modifier.fillMaxSize()) {
             when (currentScreen) {
                 is BottomNavItem.Home -> {
-                    HomeScreen(
-                        currentTab = currentTab,
-                        onTabSelected = { tab -> currentTab = tab },
-                        modifier = Modifier.fillMaxSize()
-                    )
+                    if (selectedPost != null) {
+                        PostDetailScreen(
+                            post = selectedPost!!,
+                            onBackClick = { selectedPost = null },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        HomeScreen(
+                            currentTab = currentTab,
+                            onTabSelected = { tab -> currentTab = tab },
+                            onPostClick = { post -> selectedPost = post },
+                            posts = posts,
+                            isLoading = isLoading,
+                            isRefreshing = isRefreshing,
+                            isLoadingMore = isLoadingMore,
+                            hasError = hasError,
+                            likedPosts = likedPosts,
+                            onRefresh = {
+                                isRefreshing = true
+                                coroutineScope.launch {
+                                    delay(1500)
+                                    posts = generateMockPosts().shuffled()
+                                    isRefreshing = false
+                                    currentPage = 1
+                                }
+                            },
+                            onLoadMore = {
+                                if (!isLoadingMore && !hasError && posts.isNotEmpty()) {
+                                    isLoadingMore = true
+                                    coroutineScope.launch {
+                                        delay(1000)
+                                        val newPosts = generateMockPosts().shuffled()
+                                        posts = posts + newPosts
+                                        currentPage++
+                                        isLoadingMore = false
+                                    }
+                                }
+                            },
+                            onLikeClick = { postId ->
+                                likeManager.toggleLike(postId)
+                                likedPosts = likeManager.getLikedPosts()
+                            },
+                            onRetry = {
+                                hasError = false
+                                isLoading = true
+                                coroutineScope.launch {
+                                    loadInitialData(
+                                        onLoading = { /* 不需要设置，因为已经设置了 */ },
+                                        onSuccess = {
+                                            posts = it
+                                            isLoading = false
+                                        },
+                                        onError = {
+                                            isLoading = false
+                                            hasError = true
+                                        }
+                                    )
+                                }
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
                 }
 
                 is BottomNavItem.Profile -> {
@@ -101,188 +195,107 @@ fun MainScreen() {
 fun HomeScreen(
     currentTab: String,
     onTabSelected: (String) -> Unit,
+    onPostClick: (Post) -> Unit,
+    // 所有状态作为参数传入
+    posts: List<Post>,
+    isLoading: Boolean,
+    isRefreshing: Boolean,
+    isLoadingMore: Boolean,
+    hasError: Boolean,
+    likedPosts: Set<String>,
+    onRefresh: () -> Unit,
+    onLoadMore: () -> Unit,
+    onLikeClick: (String) -> Unit,
+    onRetry: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    //添加详情页状态
-    var selectedPost by remember { mutableStateOf<Post?>(null) }
+    // 移除所有内部状态管理
 
-    //用于状态管理
-    var posts by remember { mutableStateOf(emptyList<Post>()) } // 帖子列表
-    var isLoading by remember { mutableStateOf(true) } // 初始加载状态
-    var isRefreshing by remember { mutableStateOf(false) } // 下拉刷新状态
-    var isLoadingMore by remember { mutableStateOf(false) } // 加载更多状态
-    var hasError by remember { mutableStateOf(false) } // 错误状态
-    var currentPage by remember { mutableStateOf(1) } // 当前页码
-
-    //这是用于点赞管理
-    val likeManager = rememberLikeManager()
-    var likedPosts by remember { mutableStateOf(likeManager.getLikedPosts()) }
-
-    // 获取协程作用域
-    val coroutineScope = rememberCoroutineScope()
-
-    //使用PullRefresh
     val pullRefreshState = rememberPullRefreshState(
         refreshing = isRefreshing,
-        onRefresh = {
-            isRefreshing = true
-            coroutineScope.launch {
-                delay(1500) // 模拟网络请求
-                posts = generateMockPosts().shuffled()
-                isRefreshing = false
-                currentPage = 1
-            }
-        }
+        onRefresh = onRefresh
     )
 
-    //初始加载数据
-    LaunchedEffect(Unit) {
-        loadInitialData(
-            onLoading = { isLoading = true },
-            onSuccess = {
-
-                posts = it
-                isLoading = false
-                hasError = false
-            },
-            onError = {
-                isLoading = false
-                hasError = true
-            }
-        )
-    }
-
-    //<!-- 很重要的步骤 -->
-    //监听列表滚动，实现更多的加载
     val listState = rememberLazyStaggeredGridState()
-    // 使用更轻量的监听策略
+
+    // 监听滚动加载更多
     LaunchedEffect(listState, posts.size, isLoadingMore, hasError) {
         snapshotFlow {
-            // 只监听第一个可见项索引，计算量最小
             listState.firstVisibleItemIndex
         }
             .map { firstVisible ->
-                // 计算是否接近底部
                 val visibleCount = listState.layoutInfo.visibleItemsInfo.size
                 firstVisible + visibleCount >= posts.size - 5
             }
-            .distinctUntilChanged() // 只有 true/false 状态变化时才处理
+            .distinctUntilChanged()
             .collect { shouldLoadMore ->
-                if (shouldLoadMore && !isLoadingMore && !hasError && posts.isNotEmpty()) {
-                    coroutineScope.launch {
-                        isLoadingMore = true
-                        try {
-                            val newPosts = generateMockPosts().shuffled() // 直接返回数据
-                            posts = posts + newPosts
-                            currentPage++
-                        } catch (e: Exception) {
-                            // 错误处理
-                        } finally {
-                            isLoadingMore = false
-                        }
-                    }
+                if (shouldLoadMore) {
+                    onLoadMore()
                 }
             }
     }
-    //添加点击就可以展示详情的页面
-    if (selectedPost != null) {
-        //展示详情页面
-        PostDetailScreen(
-            post = selectedPost!!,
-            onBackClick = { selectedPost = null },
+
+    Column(modifier = modifier) {
+        HomeTabs(
+            currentTab = currentTab,
+            onTabSelected = onTabSelected,
             modifier = Modifier.fillMaxWidth()
         )
-    } else {
-        Column(modifier = modifier) {
-            HomeTabs(
-                currentTab = currentTab,
-                onTabSelected = onTabSelected,
-                modifier = Modifier.fillMaxWidth()
-            )
-            //这里是内容区域
-            Box(modifier = Modifier.fillMaxSize()) {
-                when {
-                    hasError && posts.isEmpty() -> {
-                        //首次刷新失败
-                        EmptyState(
-                            onRetry = {
-                                hasError = false
-                                isLoading = true
-                                //重新加载
-                                coroutineScope.launch {
-                                    loadInitialData(
-                                        onLoading = { /*todo*/ },
-                                        onSuccess = {
-                                            posts = it
-                                            isLoading = false
-                                        },
-                                        onError = {
-                                            isLoading = false
-                                            hasError = true
-                                        }
-                                    )
-                                }
-                            },
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
 
-                    isLoading && posts.isEmpty() -> {
-                        LoadingState(modifier = Modifier.fillMaxSize())
-                    }
-
-                    else -> {
-                        //下拉刷新和瀑布流
-                        Box(
+        Box(modifier = Modifier.fillMaxSize()) {
+            when {
+                hasError && posts.isEmpty() -> {
+                    EmptyState(
+                        onRetry = onRetry,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                isLoading && posts.isEmpty() -> {
+                    LoadingState(modifier = Modifier.fillMaxSize())
+                }
+                else -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .pullRefresh(pullRefreshState)
+                    ) {
+                        LazyVerticalStaggeredGrid(
+                            columns = StaggeredGridCells.Fixed(2),
+                            state = listState,
                             modifier = Modifier
                                 .fillMaxSize()
-                                .pullRefresh(pullRefreshState)
+                                .background(Color(0xFFF5F5F5)),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalItemSpacing = 4.dp,
+                            contentPadding = PaddingValues(4.dp)
                         ) {
-                            LazyVerticalStaggeredGrid(
-                                columns = StaggeredGridCells.Fixed(2),
-                                state = listState,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(Color(0xFFF5F5F5)),
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                verticalItemSpacing = 4.dp,
-                                contentPadding = PaddingValues(4.dp)
-                            ) {
-                                itemsIndexed(posts) { index, post ->
-                                    val isLiked = likedPosts.contains(post.id)
+                            itemsIndexed(posts) { index, post ->
+                                val isLiked = likedPosts.contains(post.id)
 
-                                    PostCard(
-                                        post = post,
-                                        isLiked = isLiked,
-                                        onLikeClick = { postId ->
-                                            likeManager.toggleLike(postId)
-                                            likedPosts = likeManager.getLikedPosts()
-                                        },
-                                        onPostClick = { clickdPost ->
-                                            //处理帖子点击
-                                            selectedPost = clickdPost
-                                        },
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-                                }
-                                if (isLoadingMore) {
-                                    item {
-                                        LoadMoreState()
-                                    }
+                                PostCard(
+                                    post = post,
+                                    isLiked = isLiked,
+                                    onLikeClick = onLikeClick,
+                                    onPostClick = onPostClick,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                            if (isLoadingMore) {
+                                item {
+                                    LoadMoreState()
                                 }
                             }
-                            //下拉刷新指示器
-                            PullRefreshIndicator(
-                                refreshing = isRefreshing,
-                                state = pullRefreshState,
-                                modifier = Modifier.align(Alignment.TopCenter)
-                            )
                         }
+                        PullRefreshIndicator(
+                            refreshing = isRefreshing,
+                            state = pullRefreshState,
+                            modifier = Modifier.align(Alignment.TopCenter)
+                        )
                     }
                 }
             }
         }
-}
+    }
 }
 
 @Composable
