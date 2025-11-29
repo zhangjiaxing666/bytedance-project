@@ -573,7 +573,235 @@ Box(modifier = Modifier.fillMaxSize()) {
 }
 ```
 
+## 3.4 关于帖子详情页的实现
 
+### 3.4.1 顶部作者区的实现
+
+整体采用Row布局来实现的顶部作者区，从左到右分别为：<（返回Icon）、作者头像&昵称、关注按钮，实现逻辑较为简单，一次放入Row布局即可，这里只给出具体结构，就不给出具体实现细节了
+
+```kotlin
+Row(
+    modifier = modifier,
+    verticalAlignment = Alignment.CenterVertically
+) {
+    //返回按钮
+    IconButton(onClick = onBackClick) {
+        Icon()
+    }
+    //作者信息
+    Row() {
+        Image()
+        Spacer(modifier = Modifier.width(8.dp))
+        Text()
+    }
+    //关注按钮
+    IconButton() {
+        Image()
+    }
+}
+```
+
+### 3.4.2 底部交互区的实现
+
+同样如此，底部交互区也使用Row来布局，首先是快捷评论区，选择的是Box布局来实现的，接下来就是四个分享的按钮，我们都是用IconButton类实现的，然后其中文档上面要求是点赞按钮和分享按钮是需要有交互的，只需要点击点赞按钮的时候点赞数目加一心心变红，点击分享按钮的时候分享数目加一即可。同样，整体采用Row来布局，Row里面从左到右依次是快捷评论框，点赞按钮和计数、评论按钮和计数、收藏按钮和计数、分享按钮和计数。其中的每一个按钮合计数都使用Column布局来实现。下面是底部交互区的实现结构
+
+```kotlin
+@Composable
+private fun BottomInteractionBar(
+    isLiked: Boolean,
+    onLikeClick: () -> Unit,
+    onCommentClick: () -> Unit,
+    onCollectionClick: () -> Unit,
+    onSharedClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row() {
+        //快捷评论框
+        Box() {
+            Text()
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+
+        // 点赞按钮和计数
+        Column() {
+            IconButton() {}
+            Text()
+        }
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        // 评论按钮和计数
+        Column() {
+            IconButton() {}
+            Text()
+        }
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        // 收藏按钮和计数
+        Column() {
+            IconButton() {}
+            Text()
+        }
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        // 分享按钮和计数
+        Column() {
+            IconButton() {}
+            Text()
+        }
+        
+    }
+}
+```
+
+### 3.4.3 横滑容器的实现
+
+整个横滑容器组件，我命名为`ImageSwiper`，具体实现逻辑是，先创建`rememberPagerState`，来记住`Pager`的状态。然后使用`LaunchedEffect`监听 `pagerState.currentPage` 的变化，每当用户滑动切换图片的时候，就会调用`onIndexChange`回调更新外部状态。最核心的组件就是`HorizontalPager`，即水平翻页器，在里面创建一个Image组件然后遍历即可完成、整个横滑容器
+
+```kotlin
+private fun ImageSwiper(
+    imageResList: List<Int>, // 图片资源ID列表
+    currentIndex: Int, // 当前显示的图片索引
+    onIndexChange: (Int) -> Unit, // 当图片切换时的回调函数
+    modifier: Modifier = Modifier
+) {
+    val pagerState = rememberPagerState(
+        initialPage = currentIndex,
+        pageCount = { imageResList.size }
+    )
+    //同步pager状态和外部状态
+    LaunchedEffect(pagerState.currentPage) {
+        onIndexChange(pagerState.currentPage)
+    }
+
+    HorizontalPager(
+        state = pagerState,
+        modifier = modifier
+    ) { page ->
+        Image(
+            painter = painterResource(id = imageResList[page]),
+            contentDescription = "帖子图片",
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
+        )
+    }
+}
+```
+
+### 3.4.4 进度条的实现
+
+进度条我是使用`FullWidthProgressIndicator`这个函数来实现的，这样取名字是因为这个进度条要占满图片的宽度，按照图片的数目进行平分，总体采用一个`Row`布局即可，然后每个进度条用一个`Box`装起来。
+
+```kotlin
+@Composable
+private fun FullWidthProgressIndicator(
+    total: Int, // 总图片数
+    current: Int, // 当前进度位置
+    modifier: Modifier = Modifier
+) {
+    Row() {
+        repeat(total) { index ->
+            Box()
+            )
+        }
+    }
+}
+```
+
+### 3.4.5 标题区+正文区+发布日期的实现
+
+首先是标题区，这个的实现较为简单，我们需要判空一下，不为空的时候才展示出标题来，具体代码如下所示
+
+```kotlin
+// title是可空的
+post.title?.let { title ->
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.fillMaxWidth()
+    )
+    Spacer(modifier = Modifier.height(12.dp))
+}
+```
+
+正文区的实现使用Text组件较为方便，可以完美显示正文且不会截断
+
+```kotlin
+// 正文
+Text(
+    text = post.content,
+    style = MaterialTheme.typography.bodyMedium,
+    modifier = Modifier.fillMaxWidth()
+)
+```
+
+这个部分主要是话题区域部分，我们需要以蓝黑色显示话题词并且支持点击话题词进入话题词详情页面的功能，这里就简单实现了，跳转的页面可能看起来有点简陋。我把话题词全部放入了`post`的`topic`参数里面，这个`topic`是一个`List<String>`类型，我们展示话题词的时候，只需要使用`forEach`来遍历这个`topic`即可。然后点击这个`topic`的时候添加回调函数，使之能跳转到话题词页面
+
+```kotlin
+// 话题词 - 显示在正文末尾
+if (post.topics.isNotEmpty()) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        post.topics.forEach { topic ->
+            Text(
+                text = "#$topic",
+                color = Color(0xFF04498D),
+                style = MaterialTheme.typography.labelMedium,
+                modifier = Modifier
+                    .clickable {
+                        // 处理话题点击，跳转到话题页面
+                        onTopicClick(topic)
+                    }
+                    .padding(vertical = 2.dp)
+            )
+        }
+    }
+    Spacer(modifier = Modifier.height(12.dp))
+}
+```
+
+最后便是发布日期的展示，这个需要根据离现在不同的时间来展示不同的发布日期，所以我选择使用时间戳来判断是使用哪种形式的发布日期
+
+我使用了一个`formatPostDate`的函数来解决这个问题，其参数`createTime`中传入时间戳，根据时间戳返回不同的数据
+
+```kotlin
+private fun formatPostDate(createTime: Long): String {
+    val currentTime = System.currentTimeMillis()
+    val diff = currentTime - createTime
+    val days = diff / (24 * 60 * 60 * 1000)
+    val hours = diff / (60 * 60 * 1000)
+    val minutes = diff / (60 * 1000)
+
+    return when {
+        minutes < 1 -> "刚刚"
+        hours < 1 -> "${minutes}分钟前" // 1小时内显示分钟
+        hours < 24 -> {
+            // 24小时内显示具体时间或"昨天"
+            val calendar = Calendar.getInstance().apply { timeInMillis = createTime }
+            val currentCalendar = Calendar.getInstance()
+
+            if (currentCalendar.get(Calendar.DAY_OF_YEAR) == calendar.get(Calendar.DAY_OF_YEAR) &&
+                currentCalendar.get(Calendar.YEAR) == calendar.get(Calendar.YEAR)) {
+                // 同一天显示具体时间
+                SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(createTime))
+            } else {
+                // 昨天显示"昨天 + 时间"
+                "昨天 ${SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(createTime))}"
+            }
+        }
+        days < 7 -> "${days}天前" // 7天内显示天数
+        else -> SimpleDateFormat("MM-dd", Locale.getDefault()).format(Date(createTime)) // 其他显示具体日期
+    }
+}
+```
+
+使用一个`when`来选择感觉是最方便的写法
 
 # 4.技术难点和解决方案
 

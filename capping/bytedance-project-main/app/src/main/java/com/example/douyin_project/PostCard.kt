@@ -125,7 +125,7 @@ fun PostCard(
                         Text(
                             text = formatCount(post.likeCount + if(isLiked) 1 else 0), //点击了就+1点赞数量
                             style = MaterialTheme.typography.labelSmall,
-                            color = if(isLiked) Color.Red else Color.Gray //点击了就呈现红色心心
+                            color = Color.Gray
                         )
                     }
                 }
